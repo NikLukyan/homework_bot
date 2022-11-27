@@ -1,13 +1,12 @@
 import json
-import sys
-import time
-
 import logging
 import os
+import sys
+import time
+from http import HTTPStatus
 
 import requests
 import telegram
-from http import HTTPStatus
 from dotenv import load_dotenv
 
 from exceptions import HTTPRequestError, ParseStatusError
@@ -50,10 +49,11 @@ def send_message(bot, message):
 
 def get_api_answer(timestamp):
     """Делает запрос к единственному эндпоинту API-сервиса."""
-
     payload = {'from_date': timestamp}
     try:
-        homework_statuses = requests.get(ENDPOINT, headers=HEADERS, params=payload)
+        homework_statuses = requests.get(ENDPOINT,
+                                         headers=HEADERS,
+                                         params=payload)
     except requests.exceptions.RequestException:
         stat_err = homework_statuses.status_code
         message = f"Ошибка при запросе к API: {stat_err}"
