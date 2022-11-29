@@ -1,4 +1,8 @@
-class HTTPRequestError(Exception):
+class NikitaError(Exception):
+    pass
+
+
+class HTTPRequestError(NikitaError):
     def __init__(self, response):
         message = (
             f'Эндпоинт {response.url} недоступен. '
@@ -7,7 +11,7 @@ class HTTPRequestError(Exception):
         super().__init__(message)
 
 
-class ParseStatusError(Exception):
+class ParseStatusError(NikitaError):
     def __init__(self, text):
         message = (
             f'Парсинг ответа API: {text}'
@@ -15,9 +19,17 @@ class ParseStatusError(Exception):
         super().__init__(message)
 
 
-class CheckResponseError(Exception):
+class CheckResponseError(NikitaError):
     def __init__(self, text):
         message = (
             f'Проверка ответа API: {text}'
+        )
+        super().__init__(message)
+
+
+class NotSendMessageTelegram(NikitaError):
+    def __init__(self):
+        message = (
+            'Ошибка при отправке сообщения в телеграм.'
         )
         super().__init__(message)

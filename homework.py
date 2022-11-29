@@ -9,7 +9,7 @@ import requests
 import telegram
 from dotenv import load_dotenv
 
-from exceptions import HTTPRequestError, ParseStatusError
+from exceptions import HTTPRequestError, ParseStatusError, NikitaError, NotSendMessageTelegram
 
 load_dotenv()
 
@@ -30,36 +30,38 @@ HOMEWORK_VERDICTS = {
 
 def check_tokens():
     """Проверяет доступность переменных окружения."""
-    list_env = [
-        PRACTICUM_TOKEN,
-        TELEGRAM_TOKEN,
-        TELEGRAM_CHAT_ID
-    ]
-    return all(list_env)
+    return all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
 
 
 def send_message(bot, message):
     """Отправляет сообщение в Telegram чат."""
     try:
+        logging.debug('Пробуем отправить сообщение в Telegram.')
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        logging.debug('Отправка сообщения в Telegram прошла удачно.')
     except Exception as error:
-        logging.error(f'Ошибка при отправке пользователю: {error}')
+        logging.exception(f'Ошибка при отправке пользователю: {error}')
+    except telegram.error:
+        raise NotSendMessageTelegram()
+    else:
+        logging.debug('Отправка сообщения в Telegram прошла удачно.')
 
 
 def get_api_answer(timestamp):
     """Делает запрос к единственному эндпоинту API-сервиса."""
     payload = {'from_date': timestamp}
+    logging.info(f'Отправка запроса на {ENDPOINT} с параметрами {payload}')
     try:
         homework_statuses = requests.get(ENDPOINT,
                                          headers=HEADERS,
                                          params=payload)
     except requests.exceptions.RequestException:
-        stat_err = homework_statuses.status_code
-        message = f"Ошибка при запросе к API: {stat_err}"
+        stat_err = homework_statuses
+        message = f"Ошибка при запросе к API {stat_err}"
         logging.error(message)
         raise requests.exceptions.RequestException(message)
-
+    except Exception as error:
+        logging.error(f'Ошибка запроса к API адресу: {error}')
+        raise HTTPRequestError(homework_statuses)
     if homework_statuses.status_code != HTTPStatus.OK:
         logging.error(
             f'Ошибка ответа от API адреса: {homework_statuses.status_code}'
@@ -76,17 +78,17 @@ def get_api_answer(timestamp):
 
 def check_response(response: dict) -> list:
     """Проверяет ответ API на соответствие документации."""
-    if type(response) is not dict:
+    if not isinstance(response, dict):
         message = 'Тип данных ответа от API адреса не dict.'
         logging.error(message)
         raise TypeError(message)
     try:
-        homeworks_list = response.get('homeworks')
+        homeworks_list = response['homeworks']
     except KeyError:
         message = 'В ответе API отсутствует ожидаемый ключ "homeworks".'
         logging.error(message)
         raise KeyError(message)
-    if type(homeworks_list) is not list:
+    if not isinstance(homeworks_list, list):
         message = 'формат ответа не соответствует.'
         logging.error(message)
         raise TypeError(message)
@@ -105,8 +107,10 @@ def parse_status(homework):
         message = 'В ответе API отсутствует ожидаемый ключ "homework_name".'
         logging.error(message)
         raise KeyError(message)
-    if 'status' not in homework:
-        message = 'В ответе API отсутствует ожидаемый ключ "status".'
+    try:
+        homework['status']
+    except Exception as err:
+        message = f'В ответе API отсутствует ожидаемый ключ "status".{err}'
         logging.error(message)
         raise ParseStatusError(message)
     homework_name = homework.get('homework_name')
@@ -123,11 +127,13 @@ def parse_status(homework):
 def main():
     """Основная логика работы бота."""
     if not check_tokens():
-        logging.critical(
+        message = (
             'Отсутствует обязательная переменная окружения.\n'
             'Программа принудительно остановлена.'
         )
-        exit()
+        logging.critical(message)
+        sys.exit(message)
+    error_message = ''
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
     while True:
@@ -136,18 +142,26 @@ def main():
             homework = check_response(response)
             message = parse_status(homework)
             send_message(bot, message)
-            time.sleep(RETRY_PERIOD)
+        except NikitaError as err:
+            message = f'Приключилась такая беда: {err}'
+            logging.error(message)
         except Exception as error:
             message = f"Сбой в работе программы: {error}"
-            send_message(bot, message)
+            logging.error(message)
+            if error != error_message:
+                send_message(bot, message)
+                error_message = error
+        finally:
             time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
     logging.basicConfig(
         level=logging.DEBUG,
-        format='%(asctime)s [%(levelname)s] %(message)s',
-        stream=sys.stdout
-
+        format=(
+            '%(asctime)s [%(levelname)s] | '
+            '(%(filename)s).%(funcName)s:%(lineno)d | %(message)s'
+        ),
+        handlers=[logging.StreamHandler(sys.stdout)],
     )
     main()
