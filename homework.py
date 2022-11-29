@@ -9,7 +9,10 @@ import requests
 import telegram
 from dotenv import load_dotenv
 
-from exceptions import HTTPRequestError, ParseStatusError, NikitaError, NotSendMessageTelegram
+from exceptions import (HTTPRequestError,
+                        ParseStatusError,
+                        NikitaError,
+                        NotSendMessageTelegram)
 
 load_dotenv()
 
