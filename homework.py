@@ -41,10 +41,11 @@ def send_message(bot, message):
     try:
         logging.debug('Пробуем отправить сообщение в Telegram.')
         bot.send_message(TELEGRAM_CHAT_ID, message)
-    except Exception as error:
+    except Exception as err:
+        logging.exception(f'Ошибка при отправке пользователю: {err}')
+    except telegram.error as error:
         logging.exception(f'Ошибка при отправке пользователю: {error}')
-    except telegram.error:
-        raise NotSendMessageTelegram()
+        raise NotSendMessageTelegram(f'Ошибка при отправке пользователю: {error}')
     else:
         logging.debug('Отправка сообщения в Telegram прошла удачно.')
 
@@ -136,7 +137,7 @@ def main():
         )
         logging.critical(message)
         sys.exit(message)
-    error_message = ''
+    error_message = None
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
     while True:
